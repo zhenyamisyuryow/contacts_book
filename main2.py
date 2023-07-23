@@ -7,29 +7,38 @@ def input_error(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except (KeyError, ValueError, IndexError, TypeError) as e:
             return f"Error: {e}"
     return wrapper
 
 @input_error
-def add(item, name, value, *args):
-    record = contacts[name]
-    item_maps = {
-        "phone": record.add_phone,
-        "email": record.add_email,
-    }
-    item_maps[item](value)
+def add(item, name, *args):
+    if item == "contact":
+        name = Name(name)
+        record = Record(name)
+        record.add_phone(args[0])
+        if len(args)>= 2:
+            if args[1] != '':
+                record.add_email(args[1])
+        return contacts.add_contact(record)
+    else:
+        record = contacts[name]
+        item_maps = {
+            "phone": record.add_phone,
+            "email": record.add_email,
+        }
+        return item_maps[item](args[0])
 
 @input_error
-def change(item, name, new_value, old_value):
+def change(item, name, *args):
+    new_value = args[0]
+    old_value = args[1]
     record = contacts[name]
     item_maps = {
         "phone": record.change_phone,
         "email": record.change_email,
     }
-    if old_value is None:
-        old_value = 0
-    item_maps[item](old_value, new_value)
+    return item_maps[item](old_value, new_value)
 
 @input_error
 def get(item, name, *args):
@@ -45,7 +54,8 @@ def delete(item, name, *args):
             "phone": record.delete_phone,
             "email": record.delete_email,
         }
-        item_maps[item](args[1])
+        return item_maps[item](args[0])
+
 
 @input_error
 def showall():
@@ -59,72 +69,139 @@ func_maps = {
     "showall": showall,
 }
 
-@input_error
 def main():
 
+    print("\nAvailable commands: hello, add, get, change, good bye.")
+    print("\x1B[4mPlease type command and item for the operation, e.g. add contact\x1B[0m")
+
     while True:
-        print("\nAvailable commands: hello, add, get, change, good bye. \n\x1B[4mPlease type command and item for the operation, e.g add contact\x1B[0m\n")
-        user_input = input(">>> ")
-        if user_input == "showall":
-            print(showall())
-        elif user_input == "hello":
+        user_input = input(">>> ").strip().lower().split()
+        try:
+            command = user_input[0]
+        except:
+            print("Enter the command.")
+            continue
+
+        if command == "hello":
             print("Welcome to CLI Contacts Book!")
-        elif user_input in ["bye", "good bye", "exit", "close"]:
+            
+        elif command in ["bye", "good bye", "exit", "close"]:
             print("Good Bye!")
             break
+    
+        elif command == "showall":
+            print(showall())
+
         else:
-            user_input = user_input.split()
-            command = user_input[0]
-            item = user_input[1]
-            if command in func_maps and item in ["contact","phone", "email", "birthday"]:
-                new_value = None
-                old_value = None
-                name = input("Enter the name: ")
-                if command == "add" and item == "contact":
-                    name = Name(name)
-                    record = Record(name)
-                    phone = Phone(input("Enter the phone number: "))
-                    record.add_phone(phone)
-                    email = input("Enter the email address (optional, press Enter to skip): ")
-                    if email:
-                        record.add_email(Email(email))
-                    contacts.add_contact(record)
+            try:
+                item = user_input[1]
+                if item not in ["contact", "phone", "email", "birthday"]:
+                    print(f"Can not {command} {item}. Choose between: contact, phone, email or birthday.")
                     continue
-                if command == "change":
-                    data = contacts[name].get(item)
-                    if len(data)>1:
-                        print("Which one would you like to change?")
-                        for i in range(len(data)):
-                            print(f"{i+1}: {data[i]}")
-                        index = int(input(">>> "))
-                        old_value = index - 1
-                if command == "delete":
-                    if item == "contact":
-                        del contacts[name]
+            except IndexError:
+                print("Invalid command format. Type command and item for the operation.")
+                continue
+            try:
+                action = func_maps[command]
+            except KeyError:
+                print("Invalid command. Available commands are: hello, add, get, change, good bye.")
+            
+            if command == "add":
+                if item == "contact":
+                    name = input("Enter the name: ")
+                    if name in contacts:
+                        print("Contact already exists.")
                         continue
-                    else:
-                        data = contacts[name].get(item)
-                        if len(data)>1:
-                            print("Which one would you like to delete?")
-                            for i in range(len(data)):
-                                print(f"{i+1}: {data[i]}")
-                            index = int(input(">>> "))
-                            old_value = index - 1
-                        elif len(data)<=1 and item != "phone":
-                            old_value = 0
-                        else:
-                            print("Can not delete the only phone")
-                            continue
-
-                if command not in ["get", "delete"]:
-                    new_value = input(f"Enter the {item.removesuffix('s')}: ")
-
+                    phone = input("Enter the phone: ")
+                    email = input("Enter the emails address (optional, press Enter to skip):")
+                    print(action(item, name, phone, email))
+                    continue
+                else:
+                    name = input("Enter the name: ")
+                    try:
+                        contacts[name]
+                    except KeyError:
+                        print(f"Error: {name} is not in contacts.")
+                        continue
+                    new_value = input(f"Enter the {item}: ")
+                    print(action(item, name, new_value))
+            
+            elif command == "change" or command == "delete":
+                name = input("Enter the name: ")
                 try:
-                    print(func_maps[command](item, name, new_value, old_value))
-                except Exception.args as e:
-                    print(e)
-            else:
-                print("Command is not supported!")
+                    data = contacts[name].get(item)
+                except KeyError:
+                    print(f"Error: {name} is not in contacts.")
+                    continue
+                if len(data)>1:
+                    print(f"Which one would you like to {command}?")
+                    for i in range(len(data)):
+                        print(f"{i+1}: {data[i]}")
+                    index = int(input(">>> "))
+                    old_value = index - 1
+                else: old_value = 0
+                if command == "delete":
+                    print(action(item, name, old_value))
+                    continue
+                new_value = input(f"Enter new {item}: ")
+                print(action(item, name, new_value, old_value))
+            
+            elif command == "delete":
+                name = input("Enter the name: ")
+
+
 
 if __name__ == "__main__":
     main()
+
+
+
+
+    # if command in func_maps and item in ["contact","phone", "email", "birthday"]:
+    #             new_value = None
+    #             old_value = None
+    #             name = input("Enter the name: ")
+    #             if command == "add" and item == "contact":
+    #                 name = Name(name)
+    #                 record = Record(name)
+    #                 phone = Phone(input("Enter the phone number: "))
+    #                 record.add_phone(phone)
+    #                 email = input("Enter the email address (optional, press Enter to skip): ")
+    #                 if email:
+    #                     record.add_email(Email(email))
+    #                 contacts.add_contact(record)
+    #                 continue
+    #             if command == "change":
+    #                 data = contacts[name].get(item)
+    #                 if len(data)>1:
+    #                     print("Which one would you like to change?")
+    #                     for i in range(len(data)):
+    #                         print(f"{i+1}: {data[i]}")
+    #                     index = int(input(">>> "))
+    #                     old_value = index - 1
+    #             if command == "delete":
+    #                 if item == "contact":
+    #                     del contacts[name]
+    #                     continue
+    #                 else:
+    #                     data = contacts[name].get(item)
+    #                     if len(data)>1:
+    #                         print("Which one would you like to delete?")
+    #                         for i in range(len(data)):
+    #                             print(f"{i+1}: {data[i]}")
+    #                         index = int(input(">>> "))
+    #                         old_value = index - 1
+    #                     elif len(data)<=1 and item != "phone":
+    #                         old_value = 0
+    #                     else:
+    #                         print("Can not delete the only phone")
+    #                         continue
+
+    #             if command not in ["get", "delete"]:
+    #                 new_value = input(f"Enter the {item.removesuffix('s')}: ")
+
+    #             try:
+    #                 print(func_maps[command](item, name, new_value, old_value))
+    #             except Exception.args as e:
+    #                 print(e)
+            
